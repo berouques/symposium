@@ -1,0 +1,40 @@
+services:
+  app:
+    build: .
+    container_name: symposium-app
+    ports:
+      - "23606:23606"   # backend API (+ embedded UI)
+      - "23607:23607"   # standalone frontend listener
+    volumes:
+      - symposium-data:/data
+      # workspaces run their own docker containers; mount the docker socket
+      # only if you run the app itself in docker (docker-in-docker caveats apply)
+    environment:
+      # первый админ (создаётся только при первом старте, когда БД пуста)
+      SYMPOSIUM_ADMIN_LOGIN: admin
+      SYMPOSIUM_ADMIN_PASSWORD: admin
+      SYMPOSIUM_PORT: "23606"
+      SYMPOSIUM_UI_PORT: "23607"
+      # первый LLM-профиль (можно задать и здесь, или позже в админ-панели):
+      # SYMPOSIUM_BOOT_BASE_URL: https://openrouter.ai/api/v1
+      # SYMPOSIUM_BOOT_API_KEY: sk-or-v1-...
+      # SYMPOSIUM_BOOT_MODEL: openai/gpt-4o-mini
+      # локальная Ollama на хосте:
+      SYMPOSIUM_OLLAMA_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # Опционально: собственная Ollama рядом с приложением.
+  # Перед использованием: docker compose exec ollama ollama pull nomic-embed-text
+  # и SYMPOSIUM_OLLAMA_URL: http://ollama:11434 выше.
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: symposium-ollama
+  #   volumes:
+  #     - ollama-models:/root/.ollama
+  #   restart: unless-stopped
+
+volumes:
+  symposium-data:
+  # ollama-models:

@@ -1,0 +1,44 @@
+/* Токены оформления. Идея: мрамор и бронза (светлая тема «Marmor») и ночной зал («Nox»);
+   акцент — патина (зелёно-бирюзовая медь). Шрифты: IBM Plex Sans (интерфейс),
+   Source Serif 4 (речь участников — это чтение), IBM Plex Mono (терминал, код). */
+:root {
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-read: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --bg: #f4f5f7; --surface: #ffffff; --raised: #eceef2; --sunken: #e8eaef;
+  --ink: #1a1f2e; --muted: #5a6376; --faint: #8a92a3; --line: #dcdfe6; --line-strong: #c4c9d4;
+  --accent: #2b7a74; --accent-hover: #236560; --accent-soft: #dcefed; --on-accent: #ffffff;
+  --warn: #9a6412; --warn-soft: #f6ead2; --danger: #b0403b; --danger-soft: #f6dedc; --ok: #2f7d4f; --ok-soft: #dcefe3;
+  --shadow: 0 1px 2px rgba(20, 26, 40, .06), 0 8px 24px rgba(20, 26, 40, .06);
+  --topbar-h: 52px; --left-w: 272px; --radius: 10px; --radius-sm: 6px;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #0f1219; --surface: #161a23; --raised: #1c212c; --sunken: #0b0d13;
+  --ink: #e7e9ee; --muted: #99a1b3; --faint: #6c7589; --line: #262c3a; --line-strong: #353d4f;
+  --accent: #52b3a9; --accent-hover: #6cc4ba; --accent-soft: #17302f; --on-accent: #0b1514;
+  --warn: #e0b25a; --warn-soft: #2e2512; --danger: #e5857f; --danger-soft: #331b1a; --ok: #6cc08c; --ok-soft: #14291d;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px rgba(0, 0, 0, .35);
+  color-scheme: dark;
+}
+
+/* ---- Palettes. Each has a light and a dark variant; data-palette + data-theme on <html>. ---- */
+
+/* Academus' Garden — olive groves, marble, shade */
+:root[data-palette="academus"] { --bg: #f2f4ee; --surface: #fbfcf8; --raised: #e8ecdf; --sunken: #e1e6d6; --ink: #1f2a1f; --muted: #54624f; --faint: #839078;
+  --line: #d9dfcf; --line-strong: #bcc5ad; --accent: #4f7a3f; --accent-hover: #3f6532; --accent-soft: #e0ecd6; --on-accent: #ffffff; --warn: #8a6a14; --warn-soft: #f3ebce; }
+:root[data-palette="academus"][data-theme="dark"] { --bg: #101510; --surface: #171e17; --raised: #1e271e; --sunken: #0b100b; --ink: #e6ecdf; --muted: #9bab92; --faint: #6c7a64;
+  --line: #263226; --line-strong: #364636; --accent: #8bbf6f; --accent-hover: #a2d086; --accent-soft: #1b2b17; --on-accent: #0c140a; --warn: #e0c25a; --warn-soft: #2d2812; }
+
+/* Sorbonne Theological College — parchment, burgundy, gilding */
+:root[data-palette="sorbonne"] { --bg: #f5efe4; --surface: #fffaf0; --raised: #ede4d3; --sunken: #e6dcc8; --ink: #2a1c1a; --muted: #6b5750; --faint: #96857c;
+  --line: #e0d4bd; --line-strong: #c9b998; --accent: #7a1f2b; --accent-hover: #621822; --accent-soft: #f1dcd8; --on-accent: #fff6ec; --warn: #8f6416; --warn-soft: #f4e6c4; --ok: #3d6b3a; }
+:root[data-palette="sorbonne"][data-theme="dark"] { --bg: #1a1213; --surface: #231819; --raised: #2d2021; --sunken: #130d0e; --ink: #efe3d3; --muted: #b3a18f; --faint: #7f6f62;
+  --line: #3a2a2b; --line-strong: #4d3a3a; --accent: #d4a24c; --accent-hover: #e3b766; --accent-soft: #33261a; --on-accent: #1a1006; --warn: #e6b862; --warn-soft: #33270f; --danger: #e5857f; }
+
+/* Solvay Congress — a 1927 blackboard: steel blue and chalk */
+:root[data-palette="solvay"] { --bg: #eceeee; --surface: #fafafa; --raised: #e2e5e7; --sunken: #d9dde0; --ink: #1b1f24; --muted: #565f68; --faint: #858d95;
+  --line: #d6dadd; --line-strong: #b8bfc5; --accent: #2f4a6b; --accent-hover: #243a55; --accent-soft: #dde6f0; --on-accent: #ffffff; }
+:root[data-palette="solvay"][data-theme="dark"] { --bg: #0e1216; --surface: #151a20; --raised: #1c232b; --sunken: #0a0d10; --ink: #e8ecef; --muted: #9aa5b0; --faint: #68737e;
+  --line: #242c35; --line-strong: #323c47; --accent: #7fa6d0; --accent-hover: #98b9de; --accent-soft: #17212d; --on-accent: #0a1018; }

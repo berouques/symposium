@@ -1,0 +1,25 @@
+import "@fontsource/ibm-plex-sans/400.css";
+import "@fontsource/ibm-plex-sans/500.css";
+import "@fontsource/ibm-plex-sans/600.css";
+import "@fontsource/ibm-plex-sans/400.css";
+import "@fontsource/ibm-plex-sans/cyrillic-400.css";
+import "@fontsource/ibm-plex-sans/cyrillic-500.css";
+import "@fontsource/ibm-plex-sans/cyrillic-600.css";
+import "@fontsource/source-serif-4/400.css";
+import "@fontsource/source-serif-4/400-italic.css";
+import "@fontsource/source-serif-4/600.css";
+import "@fontsource/source-serif-4/cyrillic-400.css";
+import "@fontsource/source-serif-4/cyrillic-400-italic.css";
+import "@fontsource/source-serif-4/cyrillic-600.css";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/cyrillic-400.css";
+import "@xterm/xterm/css/xterm.css";
+import "./styles/tokens.css";
+import "./styles/base.css";
+import "./styles/layout.css";
+import "./styles/chat.css";
+import "./styles/panels.css";
+import { createRoot } from "react-dom/client";
+import { App } from "./app";
+
+createRoot(document.getElementById("root")!).render(<App />);

@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+# Symposium — project maintenance script. Usage: ./sym <command> [arguments]
+set -euo pipefail
+cd "$(dirname "$(readlink -f "$0")")"
+ROOT="$PWD"
+WEB="$ROOT/web"
+DATA_DIR="${SYMPOSIUM_DATA_DIR:-$ROOT/data}"
+RUN_DIR="$DATA_DIR/run"
+PID_FILE="$RUN_DIR/server.pid"
+OUT_LOG="$DATA_DIR/logs/server.out"
+
+c_ok="\033[32m"; c_warn="\033[33m"; c_err="\033[31m"; c_dim="\033[2m"; c_off="\033[0m"
+say()  { printf "%b\n" "$*"; }
+ok()   { say "${c_ok}✓${c_off} $*"; }
+warn() { say "${c_warn}!${c_off} $*"; }
+die()  { say "${c_err}✗ $*${c_off}" >&2; exit 1; }
+need() { command -v "$1" >/dev/null 2>&1 || die "'$1' not found. $2"; }
+
+# port values from .env (if present) — for status / startup wait
+env_get() { [ -f .env ] && grep -E "^$1=" .env | tail -1 | cut -d= -f2- || true; }
+PORT="${SYMPOSIUM_PORT:-$(env_get SYMPOSIUM_PORT)}"; PORT="${PORT:-23606}"
+UI_PORT="${SYMPOSIUM_UI_PORT:-$(env_get SYMPOSIUM_UI_PORT)}"; UI_PORT="${UI_PORT:-23607}"
+
+is_running() { [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; }
+
+usage() {
+cat <<'TXT'
+Symposium — commands:
+
+  setup               prepare the environment: uv sync, npm ci, .env, build the UI
+  build               build the frontend (web/ → frontend/dist)
+  start [-f]          start the server in the background (-f — foreground)
+  stop                stop the server
+  restart             restart
+  status              what is alive: server, Ollama, SearXNG, LLM profiles
+  logs [-f]           show the server log (-f — follow)
+  dev                 development: backend with auto-reload + vite dev (port 5173)
+  test [args]    pytest (all arguments go to pytest)
+  e2e [args]     run symposia on a live LLM → data/e2e/<stamp>.zip
+                      (see ./sym e2e --help; the server must be running)
+  admin create <login> <password>   create an administrator
+  admin reset  <login> <password>   reset a password
+  backup [file]       archive of the data directory (DB, workspaces, RAG) → backups/
+  restore <file>      restore data from an archive (the server must be stopped)
+  reset-data          erase data (asks for confirmation; makes a backup first)
+  release             build a source archive → dist/symposium-<version>.zip
+  clean               remove caches and builds (data/ is untouched)
+TXT
+}
+
+cmd_setup() {
+  need uv "Install uv: https://docs.astral.sh/uv/"
+  say "${c_dim}Python dependencies (uv sync)…${c_off}"
+  uv sync
+  ok "Python environment ready ($(uv run python --version))"
+  if [ ! -f .env ]; then cp .env.example .env; ok ".env created from .env.example — put your API key into SYMPOSIUM_BOOT_API_KEY"; else ok ".env already exists"; fi
+  if command -v npm >/dev/null 2>&1 && [ -d "$WEB" ]; then
+    cmd_build
+  else
+    warn "npm not found — the frontend is not built. Install Node.js 20+ and run ./sym build"
+  fi
+  say ""; say "Next: ${c_ok}./sym start${c_off}, then open http://127.0.0.1:${UI_PORT}"
+}
+
+cmd_build() {
+  need npm "Node.js 20+ is required (https://nodejs.org or via nvm/fnm)."
+  [ -d "$WEB" ] || die "the web/ directory is missing"
+  ( cd "$WEB"
+    if [ ! -d node_modules ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
+      say "${c_dim}npm ci…${c_off}"; npm ci --no-audit --no-fund
+    fi
+    say "${c_dim}vite build…${c_off}"; npm run build )
+  ok "frontend built → frontend/dist"
+}
+
+cmd_start() {
+  need uv "Install uv: https://docs.astral.sh/uv/"
+  if is_running; then warn "already running (pid $(cat "$PID_FILE"))"; return 0; fi
+  mkdir -p "$RUN_DIR" "$DATA_DIR/logs"
+  [ -f frontend/dist/index.html ] || warn "frontend not built (a placeholder will be served) — run ./sym build"
+  if [ "${1:-}" = "-f" ]; then exec uv run python -m app.cli serve; fi
+  nohup uv run python -m app.cli serve >>"$OUT_LOG" 2>&1 &
+  echo $! >"$PID_FILE"
+  for _ in $(seq 1 40); do
+    if curl -fsS "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then
+      ok "server started (pid $(cat "$PID_FILE")): UI http://127.0.0.1:${UI_PORT}  API http://127.0.0.1:${PORT}"; return 0
+    fi
+    is_running || { tail -n 20 "$OUT_LOG" || true; die "the server crashed on startup (see $OUT_LOG)"; }
+    sleep 0.5
+  done
+  die "the server did not answer within 20 s (see ./sym logs)"
+}
+
+cmd_stop() {
+  if ! is_running; then warn "not running"; rm -f "$PID_FILE"; return 0; fi
+  pid="$(cat "$PID_FILE")"
+  # uv run spawns a child process — stop the whole group
+  pkill -TERM -P "$pid" 2>/dev/null || true; kill -TERM "$pid" 2>/dev/null || true
+  for _ in $(seq 1 20); do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+  kill -0 "$pid" 2>/dev/null && { pkill -KILL -P "$pid" 2>/dev/null || true; kill -KILL "$pid" 2>/dev/null || true; }
+  rm -f "$PID_FILE"; ok "stopped"
+}
+
+cmd_status() {
+  need uv "Install uv."
+  if is_running; then ok "server process: pid $(cat "$PID_FILE")"; else warn "server process not found (./sym start)"; fi
+  uv run python -m app.cli status 2>/dev/null | grep -v " | INFO " || true
+}
+
+cmd_logs() {
+  [ -f "$OUT_LOG" ] || die "no log yet ($OUT_LOG)"
+  if [ "${1:-}" = "-f" ]; then tail -n 80 -f "$OUT_LOG"; else tail -n 120 "$OUT_LOG"; fi
+}
+
+cmd_dev() {
+  need uv "Install uv."; need npm "Node.js 20+ is required."
+  [ -d "$WEB/node_modules" ] || ( cd "$WEB" && npm ci --no-audit --no-fund )
+  say "backend: http://127.0.0.1:${PORT} · vite: http://127.0.0.1:5173 (Ctrl+C stops both)"
+  trap 'kill 0' EXIT INT TERM
+  SYMPOSIUM_UI_PORT=off uv run uvicorn app.main:app --reload --reload-dir app --host 127.0.0.1 --port "$PORT" &
+  ( cd "$WEB" && VITE_API_PROXY="http://127.0.0.1:${PORT}" npm run dev -- --host 127.0.0.1 ) &
+  wait
+}
+
+cmd_test() { need uv "Install uv."; uv run python -m pytest "${@:--q}"; }
+
+cmd_e2e() {
+  need uv "Install uv."
+  curl -fsS "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1 || die "the server does not answer on :${PORT} — run ./sym start first"
+  uv run python scripts/e2e.py --url "http://127.0.0.1:${PORT}" --out "$DATA_DIR/e2e" "$@"
+}
+
+cmd_admin() {
+  need uv "Install uv."
+  case "${1:-}" in
+    create) [ $# -ge 3 ] || die "usage: ./sym admin create <login> <password>"; uv run python -m app.cli create-admin "$2" "$3" ;;
+    reset)  [ $# -ge 3 ] || die "usage: ./sym admin reset <login> <password>";  uv run python -m app.cli reset-password "$2" "$3" ;;
+    *) die "usage: ./sym admin create|reset <login> <password>" ;;
+  esac
+}
+
+cmd_backup() {
+  [ -d "$DATA_DIR" ] || die "no data directory ($DATA_DIR)"
+  mkdir -p backups
+  target="${1:-backups/symposium-data-$(date +%Y%m%d-%H%M%S).tar.gz}"
+  # SQLite in WAL mode: for a perfectly consistent copy stop the server first
+  tar -czf "$target" -C "$(dirname "$DATA_DIR")" --exclude='*/run' --exclude='*/e2e' "$(basename "$DATA_DIR")"
+  ok "backup: $target ($(du -h "$target" | cut -f1))"
+  is_running && warn "the server is running: for a perfectly consistent copy stop it (./sym stop)"
+  return 0
+}
+
+cmd_restore() {
+  [ $# -ge 1 ] && [ -f "$1" ] || die "usage: ./sym restore <archive.tar.gz>"
+  is_running && die "stop the server first: ./sym stop"
+  read -r -p "Data in $DATA_DIR will be replaced. Continue? [y/N] " a; [ "${a:-}" = "y" ] || die "cancelled"
+  [ -d "$DATA_DIR" ] && mv "$DATA_DIR" "$DATA_DIR.before-restore.$(date +%s)"
+  tar -xzf "$1" -C "$(dirname "$DATA_DIR")"; ok "restored from $1"
+}
+
+cmd_reset_data() {
+  is_running && die "stop the server first: ./sym stop"
+  [ -d "$DATA_DIR" ] || { warn "no data"; return 0; }
+  read -r -p "Delete ALL data ($DATA_DIR)? A backup is made first. [y/N] " a; [ "${a:-}" = "y" ] || die "cancelled"
+  cmd_backup; rm -rf "$DATA_DIR"; ok "data deleted"
+}
+
+cmd_release() {
+  need zip "Install zip."
+  v="$(cat VERSION.txt)"; mkdir -p dist
+  out="dist/symposium-${v}.zip"; rm -f "$out"
+  zip -qr "$out" . -x '.git/*' 'data/*' 'backups/*' 'dist/*' '.venv/*' 'web/node_modules/*' \
+     'frontend/dist/*' '*/__pycache__/*' '.pytest_cache/*' '.env' '*.pyc'
+  ok "$out ($(du -h "$out" | cut -f1))"
+}
+
+cmd_clean() {
+  find . -name __pycache__ -type d -not -path './.venv/*' -not -path './web/node_modules/*' -prune -exec rm -rf {} + 2>/dev/null || true
+  rm -rf .pytest_cache frontend/dist web/dist dist; ok "cleaned (data/ untouched)"
+}
+
+case "${1:-help}" in
+  setup) shift; cmd_setup "$@";;       build) shift; cmd_build "$@";;
+  start) shift; cmd_start "$@";;       stop) cmd_stop;;
+  restart) cmd_stop; cmd_start;;       status) cmd_status;;
+  logs) shift; cmd_logs "$@";;         dev) cmd_dev;;
+  test) shift; cmd_test "$@";;         e2e) shift; cmd_e2e "$@";;
+  admin) shift; cmd_admin "$@";;       backup) shift; cmd_backup "$@";;
+  restore) shift; cmd_restore "$@";;   reset-data) cmd_reset_data;;
+  release) cmd_release;;               clean) cmd_clean;;
+  help|-h|--help) usage;;
+  *) usage; exit 1;;
+esac
